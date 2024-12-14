@@ -7,6 +7,7 @@
 using namespace std;
 
 class PricingPolicy {
+    // Оставляем существующий код без изменений.
 private:
     string update = "last price update 25.11.2024";
     float field_cost = 500000;
@@ -41,6 +42,7 @@ public:
 };
 
 class FieldCharacteristics {
+    // Оставляем существующий код без изменений.
 private:
     static int totalFields; // Статическое поле
     float field_cost = 0, size = 0;
@@ -53,7 +55,11 @@ private:
     float final_time = 0, final_cost = 0;
 
 public:
-    FieldCharacteristics(float size, const PricingPolicy& pp) : size(size) {
+    FieldCharacteristics(float size, const PricingPolicy& pp) {
+        if (size <= 0) {
+            throw invalid_argument("Field size must be greater than 0.");
+        }
+        this->size = size;
         field_cost = pp.getFieldCost() * size;
 
         time_plowing = pp.getTimePlowing() * size;
@@ -83,18 +89,6 @@ public:
         return totalFields;
     }
 
-    float* getFinalCostPointer() {
-        return &final_cost;
-    }
-
-    float& getFinalCostReference() {
-        return final_cost;
-    }
-
-    bool compareCost(const FieldCharacteristics& other) const {
-        return this->final_cost > other.final_cost;
-    }
-
     void display() const {
         cout << "Field size: " << size << " He" << endl;
         cout << "Field cost: " << field_cost << " rub" << endl;
@@ -113,57 +107,65 @@ public:
         cout << "=======================================" << endl;
         cout << "Additional (volume of mineral fertilizers): " << volume_mineral_fertilizers << " L" << endl;
     }
-
-    FieldCharacteristics operator+(const FieldCharacteristics& other) const {
-        return FieldCharacteristics(this->size + other.size, PricingPolicy());
-    }
-
-    FieldCharacteristics& operator++() {
-        ++size;
-        return *this;
-    }
-
-    FieldCharacteristics operator++(int) {
-        FieldCharacteristics temp = *this;
-        ++size;
-        return temp;
-    }
-
-    friend bool compareFieldSizes(const FieldCharacteristics& f1, const FieldCharacteristics& f2) {
-        return f1.size > f2.size;
-    }
 };
 
 int FieldCharacteristics::totalFields = 0;
 
 int main() {
     PricingPolicy pp;
-    vector<unique_ptr<FieldCharacteristics>> fieldArray; // Массив динамических объектов
+    vector<vector<unique_ptr<FieldCharacteristics>>> fieldGroups; // Двумерный массив
     int game_status = 0;
+
     do {
         cout << "=============================================" << endl;
-        cout << "Add field | Show info | Total fields | Exit" << endl;
-        cout << "    1     |     2     |      4       |   3" << endl;
+        cout << "Add group | Add field | Show info | Exit" << endl;
+        cout << "    1     |     2     |     3     |   4" << endl;
         cout << "=============================================" << endl;
 
         cin >> game_status;
 
-        if (game_status == 1) {
-            float size;
-            cout << "Enter field size in He: ";
-            cin >> size;
-            fieldArray.push_back(make_unique<FieldCharacteristics>(size, pp));
-        }
-        else if (game_status == 2) {
-            for (size_t i = 0; i < fieldArray.size(); ++i) {
-                cout << "Field " << i + 1 << " details:" << endl;
-                fieldArray[i]->display();
+        try {
+            if (game_status == 1) {
+                fieldGroups.push_back(vector<unique_ptr<FieldCharacteristics>>());
+                cout << "New group of fields created." << endl;
+            }
+            else if (game_status == 2) {
+                if (fieldGroups.empty()) {
+                    cout << "No groups available. Create a group first." << endl;
+                }
+                else {
+                    size_t groupIndex;
+                    cout << "Select group index (1 - " << fieldGroups.size() << "): ";
+                    cin >> groupIndex;
+                    if (groupIndex < 1 || groupIndex > fieldGroups.size()) {
+                        throw out_of_range("Invalid group index.");
+                    }
+
+                    float size;
+                    cout << "Enter field size in He: ";
+                    cin >> size;
+                    fieldGroups[groupIndex - 1].push_back(make_unique<FieldCharacteristics>(size, pp));
+                }
+            }
+            else if (game_status == 3) {
+                if (fieldGroups.empty()) {
+                    cout << "No groups available." << endl;
+                }
+                else {
+                    for (size_t i = 0; i < fieldGroups.size(); ++i) {
+                        cout << "Group " << i + 1 << ":" << endl;
+                        for (size_t j = 0; j < fieldGroups[i].size(); ++j) {
+                            cout << "  Field " << j + 1 << " details:" << endl;
+                            fieldGroups[i][j]->display();
+                        }
+                    }
+                }
             }
         }
-        else if (game_status == 4) {
-            cout << "Total fields: " << FieldCharacteristics::getTotalFields() << endl;
+        catch (const exception& e) {
+            cout << "Error: " << e.what() << endl;
         }
-    } while (game_status != 3);
+    } while (game_status != 4);
 
     return 0;
 }
