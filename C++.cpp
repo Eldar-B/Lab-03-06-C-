@@ -3,11 +3,11 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <algorithm>
 
 using namespace std;
 
 class PricingPolicy {
-    // Оставляем существующий код без изменений.
 private:
     string update = "last price update 25.11.2024";
     float field_cost = 500000;
@@ -42,9 +42,8 @@ public:
 };
 
 class FieldCharacteristics {
-    // Оставляем существующий код без изменений.
 private:
-    static int totalFields; // Статическое поле
+    static int totalFields;
     float field_cost = 0, size = 0;
 
     float time_plowing = 0, cost_plowing = 0;
@@ -78,18 +77,16 @@ public:
         final_time = pp.getFinalTime() * size;
         final_cost = pp.getFinalCost() * size;
 
-        ++totalFields; // Увеличиваем количество полей
+        ++totalFields;
     }
 
-    ~FieldCharacteristics() {
-        --totalFields; // Уменьшаем количество полей
+    virtual ~FieldCharacteristics() {
+        --totalFields;
     }
 
-    static int getTotalFields() {
-        return totalFields;
-    }
+    static int getTotalFields() { return totalFields; }
 
-    void display() const {
+    virtual void display() const {
         cout << "Field size: " << size << " He" << endl;
         cout << "Field cost: " << field_cost << " rub" << endl;
         cout << "=======================================" << endl;
@@ -107,26 +104,40 @@ public:
         cout << "=======================================" << endl;
         cout << "Additional (volume of mineral fertilizers): " << volume_mineral_fertilizers << " L" << endl;
     }
+    float getFinalCost() const { return final_cost; }
+    float getSize() const { return size; }
 };
 
 int FieldCharacteristics::totalFields = 0;
 
+class AdvancedFieldCharacteristics : public FieldCharacteristics {
+public:
+    AdvancedFieldCharacteristics(float size, const PricingPolicy& pp)
+        : FieldCharacteristics(size, pp) {
+    }
+
+    void display() const override {
+        cout << "[Advanced Field]" << endl;
+        FieldCharacteristics::display();
+    }
+};
+
 int main() {
     PricingPolicy pp;
-    vector<vector<unique_ptr<FieldCharacteristics>>> fieldGroups; // Двумерный массив
+    vector<vector<shared_ptr<FieldCharacteristics>>> fieldGroups;
     int game_status = 0;
 
     do {
         cout << "=============================================" << endl;
-        cout << "Add group | Add field | Show info | Exit" << endl;
-        cout << "    1     |     2     |     3     |   4" << endl;
+        cout << "Add group | Add field | Show info | Sort | Search | Exit" << endl;
+        cout << "    1     |     2     |     3     |   4  |    5   |   6" << endl;
         cout << "=============================================" << endl;
 
         cin >> game_status;
 
         try {
             if (game_status == 1) {
-                fieldGroups.push_back(vector<unique_ptr<FieldCharacteristics>>());
+                fieldGroups.push_back(vector<shared_ptr<FieldCharacteristics>>());
                 cout << "New group of fields created." << endl;
             }
             else if (game_status == 2) {
@@ -144,7 +155,19 @@ int main() {
                     float size;
                     cout << "Enter field size in He: ";
                     cin >> size;
-                    fieldGroups[groupIndex - 1].push_back(make_unique<FieldCharacteristics>(size, pp));
+
+                    char type;
+                    cout << "Is this an advanced field? (y/n): ";
+                    cin >> type;
+
+                    if (type == 'y') {
+                        fieldGroups[groupIndex - 1].push_back(
+                            make_shared<AdvancedFieldCharacteristics>(size, pp));
+                    }
+                    else {
+                        fieldGroups[groupIndex - 1].push_back(
+                            make_shared<FieldCharacteristics>(size, pp));
+                    }
                 }
             }
             else if (game_status == 3) {
@@ -161,11 +184,48 @@ int main() {
                     }
                 }
             }
+            else if (game_status == 4) {
+                if (fieldGroups.empty()) {
+                    cout << "No fields to sort." << endl;
+                }
+                else {
+                    for (auto& group : fieldGroups) {
+                        sort(group.begin(), group.end(),
+                            [](const shared_ptr<FieldCharacteristics>& a,
+                                const shared_ptr<FieldCharacteristics>& b) {
+                                    return a->getFinalCost() < b->getFinalCost();
+                            });
+                    }
+                    cout << "Fields sorted by final cost." << endl;
+                }
+            }
+            else if (game_status == 5) {
+                if (fieldGroups.empty()) {
+                    cout << "No fields to search." << endl;
+                }
+                else {
+                    float targetCost;
+                    cout << "Enter cost to search: ";
+                    cin >> targetCost;
+                    bool found = false;
+                    for (const auto& group : fieldGroups) {
+                        for (const auto& field : group) {
+                            if (field->getFinalCost() == targetCost) {
+                                field->display();
+                                found = true;
+                            }
+                        }
+                    }
+                    if (!found) {
+                        cout << "No field with the specified cost found." << endl;
+                    }
+                }
+            }
         }
         catch (const exception& e) {
             cout << "Error: " << e.what() << endl;
         }
-    } while (game_status != 4);
+    } while (game_status != 6);
 
     return 0;
 }
