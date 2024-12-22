@@ -4,12 +4,42 @@
 #include <vector>
 #include <memory>
 #include <algorithm>
+#include <stdexcept>
 
 using namespace std;
 
+// Абстрактный базовый класс
+class FieldBase {
+protected:
+    float size; // Защищенный член
+
+public:
+    FieldBase(float size) {
+        if (size <= 0) {
+            throw invalid_argument("Field size must be greater than 0.");
+        }
+        this->size = size;
+    }
+    virtual ~FieldBase() {}
+
+    // Геттер для size
+    float getSize() const { return size; }
+
+    virtual void display(ostream& os) const = 0; // Абстрактный метод
+    virtual float getFinalCost() const = 0;
+
+    friend ostream& operator<<(ostream& os, const FieldBase& field) {
+        field.display(os);
+        return os;
+    }
+};
+
+// Класс политики ценообразования
 class PricingPolicy {
 private:
     string update = "last price update 25.11.2024";
+
+protected:
     float field_cost = 500000;
 
     float time_plowing = 5, cost_plowing = 13000;
@@ -41,10 +71,10 @@ public:
     string getUpdate() const { return update; }
 };
 
-class FieldCharacteristics {
-private:
-    static int totalFields;
-    float field_cost = 0, size = 0;
+// Класс характеристик поля
+class FieldCharacteristics : public FieldBase {
+protected:
+    float field_cost = 0;
 
     float time_plowing = 0, cost_plowing = 0;
     float time_cultivation = 0, cost_cultivation = 0;
@@ -54,11 +84,8 @@ private:
     float final_time = 0, final_cost = 0;
 
 public:
-    FieldCharacteristics(float size, const PricingPolicy& pp) {
-        if (size <= 0) {
-            throw invalid_argument("Field size must be greater than 0.");
-        }
-        this->size = size;
+    FieldCharacteristics(float size, const PricingPolicy& pp)
+        : FieldBase(size) { // Вызов конструктора базового класса
         field_cost = pp.getFieldCost() * size;
 
         time_plowing = pp.getTimePlowing() * size;
@@ -76,156 +103,59 @@ public:
 
         final_time = pp.getFinalTime() * size;
         final_cost = pp.getFinalCost() * size;
-
-        ++totalFields;
     }
 
-    virtual ~FieldCharacteristics() {
-        --totalFields;
+    virtual void display(ostream& os) const override { // Виртуальная функция
+        os << "Field size: " << getSize() << " He\n"; // Используем геттер для size
+        os << "Field cost: " << field_cost << " rub\n";
+        os << "Final cost: " << final_cost << " rub\n";
     }
 
-    static int getTotalFields() { return totalFields; }
-
-    virtual void display() const {
-        cout << "Field size: " << size << " He" << endl;
-        cout << "Field cost: " << field_cost << " rub" << endl;
-        cout << "=======================================" << endl;
-        cout << "Plowing time: " << time_plowing << " h" << endl;
-        cout << "Cultivation time: " << time_cultivation << " h" << endl;
-        cout << "Rolling time: " << time_rolling << " h" << endl;
-        cout << "Fertilization time: " << time_fertilization << " h" << endl;
-        cout << "Final time: " << final_time << " h" << endl;
-        cout << "=======================================" << endl;
-        cout << "Plowing cost: " << cost_plowing << " rub" << endl;
-        cout << "Cultivation cost: " << cost_cultivation << " rub" << endl;
-        cout << "Rolling cost: " << cost_rolling << " rub" << endl;
-        cout << "Fertilization cost: " << cost_fertilization << " rub" << endl;
-        cout << "Final cost: " << final_cost << " rub" << endl;
-        cout << "=======================================" << endl;
-        cout << "Additional (volume of mineral fertilizers): " << volume_mineral_fertilizers << " L" << endl;
+    float getFinalCost() const override {
+        return final_cost;
     }
-    float getFinalCost() const { return final_cost; }
-    float getSize() const { return size; }
+
+    FieldCharacteristics& operator=(const FieldBase& other) { // Перегрузка оператора присваивания
+        if (this != &other) {
+            this->size = other.getSize(); // Используем геттер для size
+        }
+        return *this;
+    }
 };
 
-int FieldCharacteristics::totalFields = 0;
+// Производный класс (например, для орошения)
+class IrrigatedField : public FieldCharacteristics {
+private:
+    float irrigation_cost;
 
-class AdvancedFieldCharacteristics : public FieldCharacteristics {
 public:
-    AdvancedFieldCharacteristics(float size, const PricingPolicy& pp)
-        : FieldCharacteristics(size, pp) {
+    IrrigatedField(float size, const PricingPolicy& pp, float irrigation_cost)
+        : FieldCharacteristics(size, pp), irrigation_cost(irrigation_cost) {
     }
 
-    void display() const override {
-        cout << "[Advanced Field]" << endl;
-        FieldCharacteristics::display();
+    void display(ostream& os) const override { // Перегрузка метода display
+        os << "[Irrigated Field]\n";
+        FieldCharacteristics::display(os); // Вызов базового метода
+        os << "Irrigation cost: " << irrigation_cost << " rub\n";
+        os << "Total cost: " << (getFinalCost() + irrigation_cost) << " rub\n";
     }
 };
 
+// Демонстрация
 int main() {
     PricingPolicy pp;
-    vector<vector<shared_ptr<FieldCharacteristics>>> fieldGroups;
-    int game_status = 0;
 
-    do {
-        cout << "=============================================" << endl;
-        cout << "Add group | Add field | Show info | Sort | Search | Exit" << endl;
-        cout << "    1     |     2     |     3     |   4  |    5   |   6" << endl;
-        cout << "=============================================" << endl;
+    // Создание объектов
+    FieldCharacteristics field1(10, pp);
+    IrrigatedField field2(15, pp, 50000);
 
-        cin >> game_status;
+    // Динамическое использование
+    shared_ptr<FieldBase> baseField = make_shared<IrrigatedField>(20, pp, 75000);
 
-        try {
-            if (game_status == 1) {
-                fieldGroups.push_back(vector<shared_ptr<FieldCharacteristics>>());
-                cout << "New group of fields created." << endl;
-            }
-            else if (game_status == 2) {
-                if (fieldGroups.empty()) {
-                    cout << "No groups available. Create a group first." << endl;
-                }
-                else {
-                    size_t groupIndex;
-                    cout << "Select group index (1 - " << fieldGroups.size() << "): ";
-                    cin >> groupIndex;
-                    if (groupIndex < 1 || groupIndex > fieldGroups.size()) {
-                        throw out_of_range("Invalid group index.");
-                    }
+    cout << field1 << endl;
+    cout << field2 << endl;
 
-                    float size;
-                    cout << "Enter field size in He: ";
-                    cin >> size;
-
-                    char type;
-                    cout << "Is this an advanced field? (y/n): ";
-                    cin >> type;
-
-                    if (type == 'y') {
-                        fieldGroups[groupIndex - 1].push_back(
-                            make_shared<AdvancedFieldCharacteristics>(size, pp));
-                    }
-                    else {
-                        fieldGroups[groupIndex - 1].push_back(
-                            make_shared<FieldCharacteristics>(size, pp));
-                    }
-                }
-            }
-            else if (game_status == 3) {
-                if (fieldGroups.empty()) {
-                    cout << "No groups available." << endl;
-                }
-                else {
-                    for (size_t i = 0; i < fieldGroups.size(); ++i) {
-                        cout << "Group " << i + 1 << ":" << endl;
-                        for (size_t j = 0; j < fieldGroups[i].size(); ++j) {
-                            cout << "  Field " << j + 1 << " details:" << endl;
-                            fieldGroups[i][j]->display();
-                        }
-                    }
-                }
-            }
-            else if (game_status == 4) {
-                if (fieldGroups.empty()) {
-                    cout << "No fields to sort." << endl;
-                }
-                else {
-                    for (auto& group : fieldGroups) {
-                        sort(group.begin(), group.end(),
-                            [](const shared_ptr<FieldCharacteristics>& a,
-                                const shared_ptr<FieldCharacteristics>& b) {
-                                    return a->getFinalCost() < b->getFinalCost();
-                            });
-                    }
-                    cout << "Fields sorted by final cost." << endl;
-                }
-            }
-            else if (game_status == 5) {
-                if (fieldGroups.empty()) {
-                    cout << "No fields to search." << endl;
-                }
-                else {
-                    float targetCost;
-                    cout << "Enter cost to search: ";
-                    cin >> targetCost;
-                    bool found = false;
-                    for (const auto& group : fieldGroups) {
-                        for (const auto& field : group) {
-                            if (field->getFinalCost() == targetCost) {
-                                field->display();
-                                found = true;
-                            }
-                        }
-                    }
-                    if (!found) {
-                        cout << "No field with the specified cost found." << endl;
-                    }
-                }
-            }
-        }
-        catch (const exception& e) {
-            cout << "Error: " << e.what() << endl;
-        }
-    } while (game_status != 6);
+    baseField->display(cout); // Вызов через указатель на базовый класс
 
     return 0;
 }
